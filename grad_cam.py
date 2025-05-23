@@ -84,4 +84,79 @@ class GradCAM:
         self.backward_handle.remove()
         self.activations = None
         self.gradients = None
+        
+# GradCAMインスタンスの作成
+grad_cam = GradCAM(model, target_layer)
+
+# Grad-CAMの計算 (特定のクラスID、または最も確率の高いクラス)
+# 例: ImageNetのクラスID 243 (affenpinscher, a Poodle, a pinscher terrier)
+# target_class_idx = 243
+target_class_idx = None # Noneにすると予測確率最大のクラスが使われる
+
+heatmap_raw, predicted_class_idx = grad_cam(input_tensor, class_idx=target_class_idx)
+
+# フックを解除 (重要)
+grad_cam.remove_hooks()
+
+print(f"Input tensor shape: {input_tensor.shape}")
+if grad_cam.activations is not None: # remove_hooks 後は None になっているはず
+    print(f"Activations shape: {grad_cam.activations.shape}")
+if grad_cam.gradients is not None:
+    print(f"Gradients shape: {grad_cam.gradients.shape}")
+print(f"Raw heatmap shape: {heatmap_raw.shape}")
+print(f"Predicted class index: {predicted_class_idx}")
+
+# (オプション) ImageNetクラスラベルの取得 (簡易版)
+# !wget -q https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt -O imagenet_classes.txt
+# with open("imagenet_classes.txt", "r") as f:
+#     imagenet_classes = [s.strip() for s in f.readlines()]
+# print(f"Predicted class name: {imagenet_classes[predicted_class_idx]}")
+
+
+def show_cam_on_image(img_pil, heatmap_np, alpha=0.5):
+    # 1. ヒートマップを0-1に正規化
+    heatmap_normalized = (heatmap_np - np.min(heatmap_np)) / (np.max(heatmap_np) - np.min(heatmap_np) + 1e-8)
+
+    # 2. 元のPIL画像をNumPy配列に変換 (0-255, RGB)
+    img_np = np.array(img_pil)
+
+    # 3. ヒートマップをリサイズし、カラーマップを適用
+    #    OpenCVはBGRを期待するので、img_npもBGRに変換
+    heatmap_resized = cv2.resize(heatmap_normalized, (img_np.shape[1], img_np.shape[0]))
+    heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)
+    heatmap_colored_rgb = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB) # Matplotlib用にRGBに戻す
+
+    # 4. 重ね合わせ
+    #    img_npがRGBであることを確認
+    if img_np.shape[2] == 3 and heatmap_colored_rgb.shape[2] == 3: # カラー画像の場合
+        superimposed_img = np.uint8(heatmap_colored_rgb * alpha + img_np * (1 - alpha))
+    else: # グレースケール画像などの場合
+        superimposed_img = np.uint8(heatmap_colored_rgb * alpha + np.stack((img_np,)*3, axis=-1) * (1 - alpha) )
+
+
+    # 表示
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 3, 1)
+    plt.imshow(img_pil)
+    plt.title("Original Image")
+    plt.axis('off')
+
+    plt.subplot(1, 3, 2)
+    plt.imshow(heatmap_resized, cmap='jet') # カラーマップ適用前のヒートマップ（リサイズ後）
+    plt.title("Grad-CAM Heatmap")
+    plt.axis('off')
+
+    plt.subplot(1, 3, 3)
+    plt.imshow(superimposed_img)
+    plt.title("Superimposed Image")
+    plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
+
+    return superimposed_img
+
+# 可視化の実行
+superimposed_image = show_cam_on_image(original_img, heatmap_raw)
+
 

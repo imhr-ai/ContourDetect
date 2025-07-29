@@ -2,135 +2,81 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>装置ログ可視化</title>
+    <title>装置ログ可視化タイムライン</title>
+    
+    <!-- Vis.js TimelineのCSSを読み込む -->
+    <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" type="text/css" />
+    
     <style>
-        /* ツールチップ用のスタイル */
-        #tooltip {
-            position: absolute;
-            display: none;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            border-radius: 5px;
-            pointer-events: none; /* ツールチップ自身がマウスイベントを邪魔しないように */
-            white-space: pre-wrap; /* ログの改行をそのまま表示 */
-            z-index: 1000;
-            max-width: 400px;
-            font-family: monospace;
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
         }
-        /* Mermaidが生成するSVG内の矢印とテキストをグループ化する要素にカーソルを設定 */
-        g.message:hover {
-            cursor: pointer;
+        #timeline-container {
+            width: 100%;
+            height: 95vh; /* 画面の高さの95%を占める */
+            border: 1px solid lightgray;
         }
-        /* ホバー時に矢印とテキストを赤く強調表示 */
-        g.message:hover .messageLine0,
-        g.message:hover .messageLine1,
-        g.message:hover .messageText {
-            stroke: #e63946; /* 強調色 */
-            stroke-width: 2.5px;
-            fill: #e63946;
+        /* ツールチップのスタイルを調整 */
+        .vis-tooltip {
+            background-color: #333 !important;
+            color: #fff !important;
+            border-radius: 5px !important;
+            padding: 10px !important;
+            white-space: pre-wrap; /* ログの改行を有効にする */
         }
     </style>
 </head>
 <body>
-    <h1>装置ログ シーケンス図</h1>
-    <div id="mermaid-container">
-        <p>ログを読み込んでいます...</p>
-    </div>
+    <h1>装置ログ タイムライン</h1>
+    <div id="timeline-container"></div>
 
-    <!-- ツールチップ表示用の要素 -->
-    <div id="tooltip"></div>
+    <!-- Vis.js TimelineのJavaScriptライブラリを読み込む -->
+    <script type="text/javascript" src="https://unpkg.com/vis-timeline@latest/standalone/umd/vis-timeline-graph2d.min.js"></script>
 
-    <script type="module">
-        // Mermaid.jsをインポート
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-
-        // ページの読み込みが完了したら処理を開始
+    <script>
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                // 1. APIからログデータのJSONを取得
-                const response = await fetch('/api/logs');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const logs = await response.json();
+                // 1. バックエンドAPIからデータを取得
+                const response = await fetch('/api/timeline-logs');
+                const data = await response.json();
 
-                const container = document.getElementById('mermaid-container');
-                if (logs.length === 0) {
-                    container.innerText = '表示するログがありません。';
-                    return;
-                }
+                const container = document.getElementById('timeline-container');
+                const groups = new vis.DataSet(data.groups);
+                const items = new vis.DataSet(data.items);
 
-                // 2. 取得したログデータから、動的にMermaidの構文を文字列として生成
-                let mermaidSyntax = 'sequenceDiagram\n';
-                // 登場するスレッドを重複なくリストアップ
-                const participants = new Set();
-                logs.forEach(log => {
-                    participants.add(log.from_thread);
-                    participants.add(log.to_thread);
-                });
-                participants.forEach(p => {
-                    mermaidSyntax += `    participant ${p}\n`;
-                });
-                // 各ログを矢印として追加
-                logs.forEach(log => {
-                    // メッセージ内の特殊文字をエスケープ
-                    const message = log.message.replace(/[#;]/g, '_');
-                    mermaidSyntax += `    ${log.from_thread}->>${log.to_thread}: ${message}\n`;
-                });
+                // 2. タイムラインのオプションを設定
+                const options = {
+                    // --- インタラクション設定 ---
+                    zoomable: true,      // 時間軸のズームを許可 (マウスホイール)
+                    moveable: true,      // 時間軸の移動を許可 (ドラッグ)
+                    stack: true,         // アイテムが重ならないように積み重ねる
+                    
+                    // --- 時間軸の設定 ---
+                    start: data.items.length > 0 ? new Date(data.items[0].start) : new Date(), // 開始時刻
+                    end: new Date(),   // 終了時刻 (適宜調整)
+                    
+                    // --- 表示設定 ---
+                    orientation: 'top', // 時間軸を上に表示
+                    margin: {
+                        item: 20,
+                        axis: 40
+                    }
+                };
 
-                // 3. 生成した構文を元に、MermaidでSVGを描画
-                const { svg } = await mermaid.render('mermaid-svg', mermaidSyntax);
-                container.innerHTML = svg;
-
-                // 4. 描画されたSVGの各要素にホバーイベントを追加
-                addHoverEvents(logs);
+                // 3. タイムラインオブジェクトを生成して描画
+                const timeline = new vis.Timeline(container, items, groups, options);
+                
+                // 最初に全アイテムが収まるようにズームを調整
+                timeline.fit();
 
             } catch (error) {
-                console.error('図の描画に失敗しました:', error);
-                document.getElementById('mermaid-container').innerText = '図の描画に失敗しました。詳細はコンソールを確認してください。';
+                console.error('タイムラインの描画に失敗しました:', error);
+                document.getElementById('timeline-container').innerText = 'タイムラインの描画に失敗しました。';
             }
         });
-
-        function addHoverEvents(logs) {
-            const tooltip = document.getElementById('tooltip');
-            // Mermaidがメッセージごとに生成する<g class="message">要素をすべて取得
-            const messageElements = document.querySelectorAll('#mermaid-container .message');
-
-            messageElements.forEach((element, index) => {
-                const logData = logs[index]; // 配列の順番で、元のログデータとSVG要素を紐付ける
-                if (!logData) return;
-
-                // マウスが要素に乗った時の処理
-                element.addEventListener('mouseover', () => {
-                    tooltip.style.display = 'block';
-                    tooltip.innerHTML = `
-                        <strong>Timestamp:</strong> ${logData.timestamp}<br>
-                        <strong>From:</strong> ${logData.from_thread}<br>
-                        <strong>To:</strong> ${logData.to_thread}<br>
-                        <hr style="margin: 5px 0; border-color: #555;">
-                        <strong>Log:</strong><br>${logData.full_log}
-                    `;
-                });
-
-                // マウスが要素の上で動いた時の処理 (ツールチップを追従させる)
-                element.addEventListener('mousemove', (event) => {
-                    tooltip.style.left = (event.pageX + 15) + 'px';
-                    tooltip.style.top = (event.pageY + 15) + 'px';
-                });
-
-                // マウスが要素から離れた時の処理
-                element.addEventListener('mouseout', () => {
-                    tooltip.style.display = 'none';
-                });
-            });
-        }
     </script>
 </body>
-</html>```
-
-### 再度お試しください
-
-お手数ですが、上記の新しい`app.py`と`index.html`に差し替えて、再度アプリケーションを実行してみてください。今度はより安定して動作するはずです。
-
-もしこれでもレンダリングされない場合、お使いのブラウザで**開発者ツール**（多くのブラウザでは`F12`キーで起動します）を開き、「**コンソール**」タブに何かエラーメッセージが表示されていないかご確認いただけますでしょうか。エラーメッセージが原因究明の大きな手がかりとなります。
+</html>

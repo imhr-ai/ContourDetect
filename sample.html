@@ -1,38 +1,136 @@
-import pandas as pd
-from flask import Flask, jsonify, render_template
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>装置ログ可視化</title>
+    <style>
+        /* ツールチップ用のスタイル */
+        #tooltip {
+            position: absolute;
+            display: none;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            border-radius: 5px;
+            pointer-events: none; /* ツールチップ自身がマウスイベントを邪魔しないように */
+            white-space: pre-wrap; /* ログの改行をそのまま表示 */
+            z-index: 1000;
+            max-width: 400px;
+            font-family: monospace;
+        }
+        /* Mermaidが生成するSVG内の矢印とテキストをグループ化する要素にカーソルを設定 */
+        g.message:hover {
+            cursor: pointer;
+        }
+        /* ホバー時に矢印とテキストを赤く強調表示 */
+        g.message:hover .messageLine0,
+        g.message:hover .messageLine1,
+        g.message:hover .messageText {
+            stroke: #e63946; /* 強調色 */
+            stroke-width: 2.5px;
+            fill: #e63946;
+        }
+    </style>
+</head>
+<body>
+    <h1>装置ログ シーケンス図</h1>
+    <div id="mermaid-container">
+        <p>ログを読み込んでいます...</p>
+    </div>
 
-app = Flask(__name__)
+    <!-- ツールチップ表示用の要素 -->
+    <div id="tooltip"></div>
 
-def get_log_data_as_list():
-    """
-    ログを解析し、辞書のリストとして返す。
-    実際にはここでログファイルを読み込み、DataFrameに変換してください。
-    """
-    # サンプルデータ
-    data = {
-        'timestamp': ['2023-10-27 10:00:01.123', '2023-10-27 10:00:02.456', '2023-10-27 10:00:03.789'],
-        'from_thread': ['ThreadA', 'ThreadB', 'ThreadA'],
-        'to_thread': ['ThreadB', 'ThreadC', 'ThreadC'],
-        'message': ['Do something', 'Task received', 'Finalize'],
-        'full_log': [
-            '2023-10-27 10:00:01.123 DEBUG: ThreadA sent "Do something" to ThreadB. Details: ...',
-            '2023-10-27 10:00:02.456 INFO: ThreadB got "Task received" from ThreadA. Status: OK',
-            '2023-10-27 10:00:03.789 DEBUG: ThreadA sent "Finalize" to ThreadC. Result: Success'
-        ]
-    }
-    df = pd.DataFrame(data)
-    # DataFrameを辞書のリスト形式（JSONにしやすい）に変換して返す
-    return df.to_dict(orient='records')
+    <script type="module">
+        // Mermaid.jsをインポート
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+        // ページの読み込みが完了したら処理を開始
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // 1. APIからログデータのJSONを取得
+                const response = await fetch('/api/logs');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const logs = await response.json();
 
-# APIエンドポイント: ログデータをJSONで返す
-@app.route('/api/logs')
-def get_logs():
-    log_data = get_log_data_as_list()
-    return jsonify(log_data)
+                const container = document.getElementById('mermaid-container');
+                if (logs.length === 0) {
+                    container.innerText = '表示するログがありません。';
+                    return;
+                }
 
-if __name__ == '__main__':
-    app.run(debug=True)
+                // 2. 取得したログデータから、動的にMermaidの構文を文字列として生成
+                let mermaidSyntax = 'sequenceDiagram\n';
+                // 登場するスレッドを重複なくリストアップ
+                const participants = new Set();
+                logs.forEach(log => {
+                    participants.add(log.from_thread);
+                    participants.add(log.to_thread);
+                });
+                participants.forEach(p => {
+                    mermaidSyntax += `    participant ${p}\n`;
+                });
+                // 各ログを矢印として追加
+                logs.forEach(log => {
+                    // メッセージ内の特殊文字をエスケープ
+                    const message = log.message.replace(/[#;]/g, '_');
+                    mermaidSyntax += `    ${log.from_thread}->>${log.to_thread}: ${message}\n`;
+                });
+
+                // 3. 生成した構文を元に、MermaidでSVGを描画
+                const { svg } = await mermaid.render('mermaid-svg', mermaidSyntax);
+                container.innerHTML = svg;
+
+                // 4. 描画されたSVGの各要素にホバーイベントを追加
+                addHoverEvents(logs);
+
+            } catch (error) {
+                console.error('図の描画に失敗しました:', error);
+                document.getElementById('mermaid-container').innerText = '図の描画に失敗しました。詳細はコンソールを確認してください。';
+            }
+        });
+
+        function addHoverEvents(logs) {
+            const tooltip = document.getElementById('tooltip');
+            // Mermaidがメッセージごとに生成する<g class="message">要素をすべて取得
+            const messageElements = document.querySelectorAll('#mermaid-container .message');
+
+            messageElements.forEach((element, index) => {
+                const logData = logs[index]; // 配列の順番で、元のログデータとSVG要素を紐付ける
+                if (!logData) return;
+
+                // マウスが要素に乗った時の処理
+                element.addEventListener('mouseover', () => {
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = `
+                        <strong>Timestamp:</strong> ${logData.timestamp}<br>
+                        <strong>From:</strong> ${logData.from_thread}<br>
+                        <strong>To:</strong> ${logData.to_thread}<br>
+                        <hr style="margin: 5px 0; border-color: #555;">
+                        <strong>Log:</strong><br>${logData.full_log}
+                    `;
+                });
+
+                // マウスが要素の上で動いた時の処理 (ツールチップを追従させる)
+                element.addEventListener('mousemove', (event) => {
+                    tooltip.style.left = (event.pageX + 15) + 'px';
+                    tooltip.style.top = (event.pageY + 15) + 'px';
+                });
+
+                // マウスが要素から離れた時の処理
+                element.addEventListener('mouseout', () => {
+                    tooltip.style.display = 'none';
+                });
+            });
+        }
+    </script>
+</body>
+</html>```
+
+### 再度お試しください
+
+お手数ですが、上記の新しい`app.py`と`index.html`に差し替えて、再度アプリケーションを実行してみてください。今度はより安定して動作するはずです。
+
+もしこれでもレンダリングされない場合、お使いのブラウザで**開発者ツール**（多くのブラウザでは`F12`キーで起動します）を開き、「**コンソール**」タブに何かエラーメッセージが表示されていないかご確認いただけますでしょうか。エラーメッセージが原因究明の大きな手がかりとなります。

@@ -2,114 +2,123 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>大規模ログ可視化</title>
+    <title>大規模ログ可視化 (修正版)</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        body { font-family: sans-serif; }
-        #chart-div { position: relative; width: 100%; height: 90vh; }
+        body { font-family: sans-serif; margin: 0; padding: 0; }
+        h1 { padding: 0 20px; }
+        #chart-container { position: relative; width: 100%; height: 85vh; }
         #message-overlay {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(255, 217, 0, 0.8);
-            padding: 10px 20px;
-            border-radius: 5px;
+            background-color: rgba(255, 193, 7, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.1em;
             font-weight: bold;
-            display: none; /* 初期状態では非表示 */
+            text-align: center;
+            display: none;
             z-index: 100;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
     <h1>装置ログ タイムライン (大規模データ対応)</h1>
-    <div id="chart-div">
+    <div id="chart-container">
         <div id="message-overlay"></div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
-            const chartDiv = document.getElementById('chart-div');
+            const chartDiv = document.getElementById('chart-container');
             const messageOverlay = document.getElementById('message-overlay');
-            // 矢印を描画するイベント数の上限
-            const ANNOTATION_THRESHOLD = 50; 
-            let allLogs = []; // 全ログデータを保持する変数
+            const ANNOTATION_THRESHOLD = 50; // 矢印を描画するイベント数の上限
+            let allLogs = []; // 全ログデータを保持
 
+            // ----- メイン処理 -----
             try {
-                // 1. 全ログデータをAPIから一度だけ取得
-                const response = await fetch('/api/raw-logs');
-                allLogs = await response.json();
+                // 1. APIから全データを取得
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+                allLogs = data.logs;
 
-                // Y軸用のスレッドリストを作成
-                const yAxisLabels = [...new Set(allLogs.map(l => l.from_thread).concat(allLogs.map(l => l.to_thread)))].sort().reverse();
-                
-                // 2. 初期描画 (アノテーションなしの散布図)
-                const initialTraces = [{
-                    x: allLogs.map(l => l.timestamp_iso),
+                // 2. 初期グラフの描画 (マーカーのみ)
+                const trace = {
+                    x: allLogs.map(l => l.timestamp),
                     y: allLogs.map(l => l.from_thread),
                     mode: 'markers',
-                    name: 'イベント',
-                    text: allLogs.map(l => `To: ${l.to_thread}<br>${l.full_log}`),
+                    type: 'scatter',
+                    text: allLogs.map(l => `<b>To: ${l.to_thread}</b><br>${l.full_log}`),
                     hoverinfo: 'text',
-                    marker: { size: 8 }
-                }];
+                    marker: { size: 7, color: 'blue' }
+                };
 
                 const layout = {
                     title: 'ログタイムライン (ズームして詳細を表示)',
-                    yaxis: { title: 'スレッド', categoryorder: 'array', categoryarray: yAxisLabels },
+                    xaxis: { title: '時間' },
+                    yaxis: { 
+                        title: 'スレッド',
+                        categoryorder: 'array',
+                        categoryarray: data.y_axis_categories 
+                    },
                     showlegend: false,
-                    annotations: [] // 最初はアノテーションなし
+                    margin: { l: 100, r: 50, b: 80, t: 80 }
                 };
 
-                await Plotly.newPlot(chartDiv, initialTraces, layout);
+                await Plotly.newPlot(chartDiv, [trace], layout);
 
-                // 3. ズーム/移動イベントの監視
-                chartDiv.on('plotly_relayout', (eventData) => {
-                    updateAnnotations(eventData);
-                });
+                // 3. ズーム/移動イベントにリスナーを設定
+                chartDiv.on('plotly_relayout', () => updateAnnotations());
                 
-                // 初期表示時にも一度実行
-                updateAnnotations({
-                    'xaxis.range[0]': allLogs[0]?.timestamp_iso,
-                    'xaxis.range[1]': allLogs[allLogs.length - 1]?.timestamp_iso
-                });
-
+                // 4. 初期表示のアノテーションを更新
+                updateAnnotations();
 
             } catch (error) {
-                console.error('グラフの描画に失敗しました:', error);
-                chartDiv.innerText = 'グラフの描画に失敗しました。';
+                console.error('グラフの初期化に失敗しました:', error);
+                chartDiv.innerHTML = '<h2>グラフの読み込みに失敗しました。</h2><p>詳細は開発者コンソールを確認してください。</p>';
             }
 
-            // アノテーションを更新する関数
-            function updateAnnotations(eventData) {
-                const xRange = eventData['xaxis.range[0]'] 
-                    ? [Date.parse(eventData['xaxis.range[0]']), Date.parse(eventData['xaxis.range[1]'])]
-                    : [Date.parse(chartDiv.layout.xaxis.range[0]), Date.parse(chartDiv.layout.xaxis.range[1])];
+            // ----- アノテーション更新関数 -----
+            function updateAnnotations() {
+                // 現在のX軸の表示範囲を取得
+                const currentLayout = chartDiv.layout;
+                if (!currentLayout.xaxis || !currentLayout.xaxis.range) {
+                    return; // 範囲が未定義なら何もしない
+                }
+                const [xStart, xEnd] = currentLayout.xaxis.range.map(d => new Date(d).getTime());
 
-                // 現在の表示範囲に含まれるログをフィルタリング
+                // 表示範囲内のログをフィルタリング
                 const visibleLogs = allLogs.filter(log => {
-                    const logTime = Date.parse(log.timestamp_iso);
-                    return logTime >= xRange[0] && logTime <= xRange[1];
+                    const logTime = new Date(log.timestamp).getTime();
+                    return logTime >= xStart && logTime <= xEnd;
                 });
+                
+                const newAnnotations = [];
 
-                let newAnnotations = [];
-                // ログ件数がしきい値以下の場合のみ矢印を描画
-                if (visibleLogs.length > 0 && visibleLogs.length <= ANNOTATION_THRESHOLD) {
-                    messageOverlay.style.display = 'none';
-                    newAnnotations = visibleLogs.map(log => ({
-                        ax: log.timestamp_iso, ay: log.from_thread,
-                        x: log.timestamp_iso, y: log.to_thread,
-                        showarrow: true, arrowhead: 2, arrowwidth: 1.5,
-                        text: log.message, font: {size: 9}
-                    }));
-                } else if (visibleLogs.length > ANNOTATION_THRESHOLD) {
-                    messageOverlay.innerText = `表示件数が多すぎます (${visibleLogs.length}件)。さらにズームしてください。`;
+                if (visibleLogs.length > ANNOTATION_THRESHOLD) {
+                    // 多すぎる場合: メッセージ表示
+                    messageOverlay.innerText = `表示件数が多すぎます (${visibleLogs.length}件)\nさらにズームしてください`;
                     messageOverlay.style.display = 'block';
+                } else if (visibleLogs.length > 0) {
+                    // 適切な件数の場合: アノテーションを生成
+                    messageOverlay.style.display = 'none';
+                    visibleLogs.forEach(log => {
+                        newAnnotations.push({
+                            ax: log.timestamp, ay: log.from_thread,
+                            x: log.timestamp, y: log.to_thread,
+                            showarrow: true, arrowhead: 3, arrowwidth: 1,
+                            text: log.message, font: { size: 9 },
+                        });
+                    });
                 } else {
+                    // 範囲内にログがない場合
                     messageOverlay.style.display = 'none';
                 }
-                
-                // Plotly.relayoutを使ってアノテーションだけを更新 (高速)
+
+                // Plotly.relayoutを使ってアノテーションだけを差分更新（高速）
                 Plotly.relayout(chartDiv, { annotations: newAnnotations });
             }
         });

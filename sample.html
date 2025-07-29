@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>装置ログ可視化</title>
+    <style>
+        /* ツールチップ用のスタイル */
+        #tooltip {
+            position: absolute;
+            display: none;
+            padding: 10px;
+            background-color: #333;
+            color: #fff;
+            border-radius: 5px;
+            pointer-events: none; /* マウスイベントを邪魔しないように */
+            white-space: pre-wrap; /* 改行をそのまま表示 */
+            z-index: 1000;
+        }
+        /* ホバーされた矢印を少し目立たせる */
+        .messageLine0:hover, .messageLine1:hover {
+            stroke: red !important;
+            stroke-width: 2px !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>装置ログ シーケンス図</h1>
+    <div id="mermaid-container">
+        <!-- ここにMermaid.jsが図を描画します -->
+    </div>
+
+    <!-- ツールチップ表示用の要素 -->
+    <div id="tooltip"></div>
+
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+
+        // APIからログデータを取得して描画・イベント設定
+        fetch('/api/logs')
+            .then(response => response.json())
+            .then(data => {
+                const mermaidContainer = document.getElementById('mermaid-container');
+                const sequenceDiagram = data.sequence;
+                const details = data.details;
+
+                // MermaidでSVGを描画
+                mermaid.render('mermaid-svg', sequenceDiagram, (svgCode) => {
+                    mermaidContainer.innerHTML = svgCode;
+                    addHoverEvents(details);
+                });
+            });
+
+        function addHoverEvents(details) {
+            const tooltip = document.getElementById('tooltip');
+            
+            // Mermaidが生成したメッセージのテキスト部分を取得
+            const messageTexts = document.querySelectorAll('tspan[id^="msg-"]');
+
+            messageTexts.forEach(textElement => {
+                const messageId = textElement.id;
+                // テキスト要素の親要素（クリックやホバーの対象領域）にイベントを設定
+                const targetElement = textElement.closest('.message'); // メッセージ全体を囲むグループ
+
+                if (targetElement) {
+                    targetElement.addEventListener('mouseover', (event) => {
+                        const detail = details[messageId];
+                        if (detail) {
+                            tooltip.style.display = 'block';
+                            tooltip.innerHTML = `<strong>Timestamp:</strong> ${detail.timestamp}<br><strong>Full Log:</strong> ${detail.full_log}`;
+                        }
+                    });
+
+                    targetElement.addEventListener('mousemove', (event) => {
+                        // マウスカーソルの少し右下にツールチップを移動
+                        tooltip.style.left = (event.pageX + 15) + 'px';
+                        tooltip.style.top = (event.pageY + 15) + 'px';
+                    });
+
+                    targetElement.addEventListener('mouseout', () => {
+                        tooltip.style.display = 'none';
+                    });
+                }
+            });
+        }
+    </script>
+</body>
+</html>

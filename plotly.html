@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Plotly ログ可視化</title>
+    <!-- Plotly.jsライブラリを読み込む -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: sans-serif; }
+        #chart-div { width: 100%; height: 90vh; }
+    </style>
+</head>
+<body>
+    <h1>装置ログ タイムラインシーケンス (Plotly)</h1>
+    <div id="chart-div">
+        <p>グラフを読み込んでいます...</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const chartDiv = document.getElementById('chart-div');
+            try {
+                // 1. バックエンドAPIからグラフ定義のJSONを取得
+                const response = await fetch('/api/plotly-chart');
+                const figJson = await response.json();
+
+                // 2. Plotly.newPlotでグラフを描画
+                // JSON.parseは不要。figJsonはすでにオブジェクト
+                Plotly.newPlot(chartDiv, figJson.data, figJson.layout);
+
+            } catch (error) {
+                console.error('グラフの描画に失敗しました:', error);
+                chartDiv.innerText = 'グラフの描画に失敗しました。詳細はコンソールを確認してください。';
+            }
+        });
+    </script>
+</body>
+</html>

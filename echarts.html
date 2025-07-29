@@ -2,20 +2,12 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>ログ可視化 (ECharts版)</title>
-    <!-- EChartsライブラリを読み込む -->
+    <title>ログ可視化 (ECharts修正版)</title>
+    <!-- EChartsライブラリ -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            font-family: sans-serif;
-        }
-        #main {
-            width: 100%;
-            height: 100%;
-        }
+        html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
+        #main { width: 100%; height: 100%; }
     </style>
 </head>
 <body>
@@ -25,79 +17,84 @@
         document.addEventListener('DOMContentLoaded', async () => {
             const chartDom = document.getElementById('main');
             const myChart = echarts.init(chartDom);
-            myChart.showLoading(); // ローディング表示を開始
+            myChart.showLoading(); // ローディング表示
 
             try {
                 // 1. APIからデータを取得
                 const response = await fetch('/api/logs');
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
                 const data = await response.json();
                 
                 // 2. EChartsのオプションを定義
                 const option = {
-                    tooltip: { // ホバー時のツールチップ設定
+                    tooltip: {
                         trigger: 'item',
                         formatter: (params) => {
-                            if (params.componentSubType === 'markLine') {
+                            // params.dataは、マッピング時に設定したオブジェクト
+                            if (params.data && params.data.full_log) { // scatterの点
+                                return `<b>${params.data.name}</b><br/>${params.data.full_log}`;
+                            }
+                            if (params.data && params.data.value) { // markLineの終点
                                 return `<b>${params.data.value}</b><br/>From: ${params.data.from}<br/>To: ${params.data.to}`;
                             }
-                            if (params.seriesType === 'scatter') {
-                                return `<b>Log Event</b><br/>${params.data.full_log}`;
-                            }
-                            return '';
+                            return 'No details';
                         }
                     },
-                    dataZoom: [ // ズームとスクロールの設定
+                    dataZoom: [ // ズーム・スクロール機能
                         { type: 'slider', xAxisIndex: 0, filterMode: 'weakFilter', bottom: 10 },
                         { type: 'inside', xAxisIndex: 0, filterMode: 'weakFilter' }
                     ],
                     grid: { left: 120, right: 50, top: 50, bottom: 60 },
-                    xAxis: { type: 'time', name: '時間' },
-                    yAxis: { type: 'category', data: data.categories, name: 'スレッド' },
+                    xAxis: { type: 'time' },
+                    yAxis: { type: 'category', data: data.categories },
                     series: [
-                        { // 各ログイベントを点としてプロット (パフォーマンスのため)
+                        {
                             name: 'Log Events',
-                            type: 'scatter',
-                            symbolSize: 6,
-                            itemStyle: { color: '#3A8EBA' },
+                            type: 'scatter', // 点を描画
+                            symbolSize: 7,
+                            itemStyle: { color: '#005F73' }, // 点の色
+                            // --- データのマッピング ---
                             data: data.logs.map(log => ({
                                 name: log.message,
-                                value: [log.timestamp, log.from_thread],
-                                full_log: log.full_log // ツールチップ用の追加情報
-                            }))
-                        },
-                        { // スレッド間のやり取りを示す矢印
-                            name: 'Interactions',
-                            type: 'line',
+                                value: [log.timestamp, log.from_thread], // [x, y]
+                                full_log: log.full_log
+                            })),
+                            // --- ここに矢印(markLine)を関連付ける ---
                             markLine: {
-                                silent: false, // ツールチップを有効にする
-                                symbol: ['none', 'arrow'], // 線の始点と終点（矢印）
-                                lineStyle: { width: 1, type: 'dashed', color: '#E63946' },
-                                emphasis: { lineStyle: { width: 2.5 } }, // ホバー時に太くする
-                                data: data.logs.map(log => ({
-                                    value: log.message, // ツールチップに表示する値
-                                    from: log.from_thread,
-                                    to: log.to_thread,
-                                    coords: [
-                                        { coord: [log.timestamp, log.from_thread] }, // 始点 [x, y]
-                                        { coord: [log.timestamp, log.to_thread] }   // 終点 [x, y]
-                                    ]
-                                }))
+                                silent: false,
+                                symbol: ['none', 'arrow'], // 始点なし、終点矢印
+                                lineStyle: { width: 1, type: 'solid', color: '#D9534F' },
+                                emphasis: { lineStyle: { width: 2.5 } },
+                                // *** ここが重要な修正点です ***
+                                // EChartsの正しいデータ形式に修正
+                                data: data.logs.map(log => ([
+                                    { // 始点オブジェクト
+                                        coord: [log.timestamp, log.from_thread]
+                                    },
+                                    { // 終点オブジェクト (ツールチップ用の情報をここに含める)
+                                        coord: [log.timestamp, log.to_thread],
+                                        value: log.message, // ツールチップに表示
+                                        from: log.from_thread,
+                                        to: log.to_thread
+                                    }
+                                ]))
                             }
                         }
                     ]
                 };
 
                 // 3. グラフを描画
-                myChart.hideLoading(); // ローディング表示を終了
+                myChart.hideLoading();
                 myChart.setOption(option);
 
-                // ウィンドウサイズ変更時にグラフをリサイズ
                 window.addEventListener('resize', () => myChart.resize());
 
             } catch (error) {
                 myChart.hideLoading();
-                console.error("グラフの描画に失敗しました:", error);
-                chartDom.innerHTML = "<h2>エラーが発生しました</h2><p>データの読み込みまたはグラフの描画に失敗しました。</p>";
+                console.error("グラフ描画中に致命的なエラーが発生しました:", error);
+                chartDom.innerHTML = "<h2>グラフ描画エラー</h2><p>データの形式、または設定に問題があります。開発者コンソール（F12キー）で詳細を確認してください。</p>";
             }
         });
     </script>

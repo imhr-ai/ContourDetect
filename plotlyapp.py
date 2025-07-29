@@ -1,36 +1,66 @@
 import pandas as pd
 from flask import Flask, jsonify, render_template
+import numpy as np # サンプルデータ生成用
 
 app = Flask(__name__)
 
-def get_raw_log_data():
+def get_log_data_for_plotly():
     """
-    ログを解析し、Pythonの辞書のリスト（JSONにしやすい形式）で返す
+    ログデータを生成し、Plotlyでの描画に必要な情報をまとめて返す
     """
-    # ここで実際のログファイルを読み込み、DataFrameに変換
-    # 以下はサンプルデータ
-    # 実際には2000件のデータが生成されると想定
+    # --- サンプルデータ生成 (2000件) ---
+    # 実際にはここでログファイルを読み込んでください
+    num_records = 2000
+    threads = [f"Thread{chr(65+i)}" for i in range(15)] # ThreadA, ThreadB, ...
+    
+    timestamps = pd.to_datetime(np.sort(np.random.uniform(
+        pd.Timestamp('2023-10-27 10:00:00').timestamp(),
+        pd.Timestamp('2023-10-27 11:00:00').timestamp(),
+        num_records
+    )), unit='s')
+
+    from_threads = np.random.choice(threads, num_records)
+    to_threads = np.random.choice(threads, num_records)
+    
+    # fromとtoが同じにならないようにする
+    for i in range(num_records):
+        while from_threads[i] == to_threads[i]:
+            to_threads[i] = np.random.choice(threads)
+            
     data = {
-        'timestamp': pd.to_datetime(['2023-10-27 10:00:01.123', '2023-10-27 10:00:02.456', '2023-10-27 10:00:03.789', '2023-10-27 10:00:05.200']),
-        'from_thread': ['ThreadA', 'ThreadB', 'ThreadA', 'ThreadC'],
-        'to_thread': ['ThreadB', 'ThreadC', 'ThreadC', 'ThreadA'],
-        'message': ['Do something', 'Task received', 'Finalize', 'Acknowledge'],
-        'full_log': ['...log A...', '...log B...', '...log C...', '...log D...']
+        'timestamp': timestamps,
+        'from_thread': from_threads,
+        'to_thread': to_threads,
+        'message': [f"Message-{i}" for i in range(num_records)],
+        'full_log': [f"Full log details for event {i}..." for i in range(num_records)]
     }
     df = pd.DataFrame(data)
+    # ------------------------------------
+
+    # Y軸の並び順を固定するため、全スレッドのリストを作成
+    all_threads_sorted = sorted(threads, reverse=True)
+
+    # フロントエンドで直接使えるように、辞書のリストに変換
+    logs_as_dict = df.to_dict(orient='records')
     
-    # フロントエンドで扱いやすいように、タイムスタンプをISO形式文字列に変換
-    df['timestamp_iso'] = df['timestamp'].apply(lambda x: x.isoformat())
-    
-    # DataFrameを辞書のリストに変換して返す
-    return df.to_dict(orient='records')
+    # タイムスタンプをPlotlyが解釈できるISO形式の文字列に変換
+    for log in logs_as_dict:
+        log['timestamp'] = log['timestamp'].isoformat()
+
+    # ログデータと、Y軸のカテゴリ情報を両方返す
+    return {
+        'logs': logs_as_dict,
+        'y_axis_categories': all_threads_sorted
+    }
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# APIエンドポイント: 生のログデータをJSONで返す
-@app.route('/api/raw-logs')
-def get_raw_logs():
-    logs = get_raw_log_data()
-    return jsonify(logs)
+@app.route('/api/logs')
+def get_logs_endpoint():
+    data = get_log_data_for_plotly()
+    return jsonify(data)
+
+if __name__ == '__main__':
+    app.run(debug=True)

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ECharts タイムチャート風 折れ線グラフ</title>
+  <!-- echarts の CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    #main {
+      width: 800px;
+      height: 400px;
+    }
+  </style>
+</head>
+<body>
+  <h3>ECharts タイムチャート風 折れ線グラフ</h3>
+  <div id="main"></div>
+
+  <script>
+    var chartDom = document.getElementById('main');
+    var myChart = echarts.init(chartDom);
+
+    var option = {
+      tooltip: {
+        trigger: 'axis'
+      },
+      xAxis: {
+        type: 'time',
+        name: '時間'
+      },
+      yAxis: {
+        type: 'category',
+        name: '系列',
+        data: ['Series A', 'Series B', 'Series C']
+      },
+      series: [
+        {
+          name: 'Series A',
+          type: 'line',
+          data: [
+            ['2025-08-26 10:00', 'Series A'],
+            ['2025-08-26 10:30', 'Series A'],
+            ['2025-08-26 11:00', 'Series A']
+          ]
+        },
+        {
+          name: 'Series B',
+          type: 'line',
+          data: [
+            ['2025-08-26 10:15', 'Series B'],
+            ['2025-08-26 10:45', 'Series B'],
+            ['2025-08-26 11:15', 'Series B']
+          ]
+        },
+        {
+          name: 'Series C',
+          type: 'line',
+          data: [
+            ['2025-08-26 09:50', 'Series C'],
+            ['2025-08-26 10:40', 'Series C'],
+            ['2025-08-26 11:20', 'Series C']
+          ]
+        }
+      ]
+    };
+
+    myChart.setOption(option);
+  </script>
+</body>
+</html>

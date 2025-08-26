@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>ECharts タイムチャート風 折れ線グラフ</title>
-  <!-- echarts の CDN -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <style>
     #main {
@@ -22,43 +21,57 @@
 
     var option = {
       tooltip: {
-        trigger: 'axis'
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross'
+        }
       },
       xAxis: {
         type: 'time',
         name: '時間'
       },
       yAxis: {
-        type: 'category',
+        type: 'value',
         name: '系列',
-        data: ['Series A', 'Series B', 'Series C']
+        min: -0.5,
+        max: 2.5,
+        interval: 1,
+        axisLabel: {
+          formatter: function (value) {
+            const labels = ['Series A', 'Series B', 'Series C'];
+            return labels[value];
+          }
+        }
       },
       series: [
         {
           name: 'Series A',
           type: 'line',
           data: [
-            ['2025-08-26 10:00', 'Series A'],
-            ['2025-08-26 10:30', 'Series A'],
-            ['2025-08-26 11:00', 'Series A']
+            ['2025-08-26 10:00', 0],
+            ['2025-08-26 10:20', 0.3],
+            ['2025-08-26 10:40', -0.2],
+            ['2025-08-26 11:00', 0.1]
           ]
         },
         {
           name: 'Series B',
           type: 'line',
           data: [
-            ['2025-08-26 10:15', 'Series B'],
-            ['2025-08-26 10:45', 'Series B'],
-            ['2025-08-26 11:15', 'Series B']
+            ['2025-08-26 10:00', 1],
+            ['2025-08-26 10:20', 1.2],
+            ['2025-08-26 10:40', 0.8],
+            ['2025-08-26 11:00', 1.1]
           ]
         },
         {
           name: 'Series C',
           type: 'line',
           data: [
-            ['2025-08-26 09:50', 'Series C'],
-            ['2025-08-26 10:40', 'Series C'],
-            ['2025-08-26 11:20', 'Series C']
+            ['2025-08-26 10:00', 2],
+            ['2025-08-26 10:20', 1.7],
+            ['2025-08-26 10:40', 2.2],
+            ['2025-08-26 11:00', 2.0]
           ]
         }
       ]

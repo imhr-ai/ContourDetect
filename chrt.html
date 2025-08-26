@@ -2,29 +2,36 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>ECharts タイムチャート風 折れ線グラフ</title>
+  <title>ECharts 心電図風折れ線</title>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <style>
     #main {
-      width: 800px;
-      height: 400px;
+      width: 900px;
+      height: 500px;
     }
   </style>
 </head>
 <body>
-  <h3>ECharts タイムチャート風 折れ線グラフ</h3>
+  <h3>ECharts 心電図風の折れ線を縦に並べる</h3>
   <div id="main"></div>
 
   <script>
-    var chartDom = document.getElementById('main');
-    var myChart = echarts.init(chartDom);
+    // 疑似的に波形データを生成する関数
+    function generateWave(offset, count, step) {
+      const data = [];
+      let time = new Date("2025-08-26 10:00").getTime();
+      for (let i = 0; i < count; i++) {
+        // サイン波 + ノイズ
+        const value = offset + Math.sin(i / 3) * 0.5 + (Math.random() - 0.5) * 0.2;
+        data.push([time, value]);
+        time += step;
+      }
+      return data;
+    }
 
     var option = {
       tooltip: {
-        trigger: 'axis',
-        axisPointer: {
-          type: 'cross'
-        }
+        trigger: 'axis'
       },
       xAxis: {
         type: 'time',
@@ -32,14 +39,13 @@
       },
       yAxis: {
         type: 'value',
-        name: '系列',
-        min: -0.5,
-        max: 2.5,
-        interval: 1,
+        min: -1,
+        max: 6,
+        interval: 2,
         axisLabel: {
           formatter: function (value) {
-            const labels = ['Series A', 'Series B', 'Series C'];
-            return labels[value];
+            const labels = {0: 'Series A', 2: 'Series B', 4: 'Series C'};
+            return labels[value] || '';
           }
         }
       },
@@ -47,36 +53,26 @@
         {
           name: 'Series A',
           type: 'line',
-          data: [
-            ['2025-08-26 10:00', 0],
-            ['2025-08-26 10:20', 0.3],
-            ['2025-08-26 10:40', -0.2],
-            ['2025-08-26 11:00', 0.1]
-          ]
+          showSymbol: false,
+          data: generateWave(0, 50, 1000)
         },
         {
           name: 'Series B',
           type: 'line',
-          data: [
-            ['2025-08-26 10:00', 1],
-            ['2025-08-26 10:20', 1.2],
-            ['2025-08-26 10:40', 0.8],
-            ['2025-08-26 11:00', 1.1]
-          ]
+          showSymbol: false,
+          data: generateWave(2, 50, 1000)
         },
         {
           name: 'Series C',
           type: 'line',
-          data: [
-            ['2025-08-26 10:00', 2],
-            ['2025-08-26 10:20', 1.7],
-            ['2025-08-26 10:40', 2.2],
-            ['2025-08-26 11:00', 2.0]
-          ]
+          showSymbol: false,
+          data: generateWave(4, 50, 1000)
         }
       ]
     };
 
+    var chartDom = document.getElementById('main');
+    var myChart = echarts.init(chartDom);
     myChart.setOption(option);
   </script>
 </body>

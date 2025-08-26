@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Plotly.js 心電図風グラフ</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    #plot {
+      width: 900px;
+      height: 500px;
+    }
+  </style>
+</head>
+<body>
+  <h3>Plotly.js 心電図風 折れ線グラフ</h3>
+  <div id="plot"></div>
+
+  <script>
+    // 波形データを作成する関数
+    function generateWave(offset, count) {
+      const x = [];
+      const y = [];
+      let start = new Date("2025-08-26 10:00").getTime();
+      for (let i = 0; i < count; i++) {
+        x.push(new Date(start + i * 1000)); // 1秒ごと
+        y.push(offset + Math.sin(i / 3) * 0.5 + (Math.random() - 0.5) * 0.2);
+      }
+      return {x, y};
+    }
+
+    // 各系列の波形
+    const waveA = generateWave(0, 60);
+    const waveB = generateWave(2, 60);
+    const waveC = generateWave(4, 60);
+
+    var traceA = {
+      x: waveA.x,
+      y: waveA.y,
+      mode: 'lines',
+      name: 'Series A'
+    };
+
+    var traceB = {
+      x: waveB.x,
+      y: waveB.y,
+      mode: 'lines',
+      name: 'Series B'
+    };
+
+    var traceC = {
+      x: waveC.x,
+      y: waveC.y,
+      mode: 'lines',
+      name: 'Series C'
+    };
+
+    var layout = {
+      title: '心電図風に縦に並んだ折れ線',
+      xaxis: { title: '時間' },
+      yaxis: {
+        title: '系列',
+        tickvals: [0, 2, 4],
+        ticktext: ['Series A', 'Series B', 'Series C']
+      }
+    };
+
+    Plotly.newPlot('plot', [traceA, traceB, traceC], layout);
+  </script>
+</body>
+</html>

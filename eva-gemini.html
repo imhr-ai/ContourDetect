@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>エヴァ風タイトル：田中</title>
+    <style>
+        body {
+            background-color: #000; /* 黒背景 */
+            color: #fff;           /* 白文字 */
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: "Hiragino Mincho ProN", "MS Mincho", "serif"; /* 明朝体指定 */
+        }
+
+        .eva-container {
+            text-align: center;
+        }
+
+        .eva-text {
+            font-weight: 900;          /* 極太 */
+            font-size: 15rem;          /* サイズ */
+            line-height: 1;
+            letter-spacing: -1rem;     /* 文字間隔を極限まで詰める */
+            transform: scaleX(0.7);    /* 横幅を圧縮して「長体」にする */
+            display: inline-block;
+            white-space: nowrap;
+            /* わずかにぼかしてブラウン管感を出す場合は以下を有効に */
+            /* text-shadow: 0 0 5px rgba(255,255,255,0.5); */
+        }
+
+        /* 装飾用の細い枠線（お好みで） */
+        .frame {
+            border: 2px solid #fff;
+            padding: 20px 40px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="eva-container">
+        <div class="eva-text">田中</div>
+    </div>
+
+</body>
+</html>
